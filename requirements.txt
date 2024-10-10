@@ -1,0 +1,2 @@
+imageio[ffmpeg]~=2.35.1
+scikit-image~=0.24.0
