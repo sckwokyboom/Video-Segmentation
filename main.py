@@ -1,46 +1,61 @@
-import imageio
-from skimage.color import rgb2gray
-from skimage.metrics import structural_similarity as ssim
-import moviepy
+import cv2
+import numpy as np
 
 
-# Функция для вычисления процентной разницы между двумя кадрами
-def calculate_frame_difference(frame1, frame2):
-    gray_frame1 = rgb2gray(frame1)
-    gray_frame2 = rgb2gray(frame2)
-
-    # Предполагаем, что значения пикселей находятся в диапазоне [0, 1]
-    score, _ = ssim(gray_frame1, gray_frame2, full=True, data_range=1.0)
-    return score
+def get_frame_diff(frame1, frame2):
+    return cv2.absdiff(frame1, frame2)
 
 
-# Функция для фильтрации видео по кадрам
-def filter_similar_frames(video_path, similarity_threshold=0.7):
-    reader = imageio.get_reader(uri=video_path)
-    fps = reader.get_meta_data()['fps']
-    writer = imageio.get_writer('output_filtered_04_threshold.mp4', fps=fps)
+def is_similar(frame1, frame2, threshold=30):
+    diff = get_frame_diff(frame1, frame2)
+    return np.mean(diff) < threshold
 
-    prev_frame = None
 
-    for i, frame in enumerate(reader):
-        if prev_frame is None:
-            prev_frame = frame
-            writer.append_data(frame)  # Сохраняем первый кадр
-            continue
+def replace_similar_frames_with_audio(video_path, output_video_path, threshold=30):
+    # Чтение исходного видео
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print("Ошибка открытия видеофайла")
+        return
 
-        # Вычисляем сходство между кадрами
-        similarity = calculate_frame_difference(prev_frame, frame)
+    # Получаем параметры видео
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
-        # Сохраняем кадр, если он отличается больше, чем на порог (например, 70%)
-        if similarity < similarity_threshold:
-            writer.append_data(frame)
+    # Открываем видео для записи
+    out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+
+    # Получаем первый кадр
+    ret, prev_frame = cap.read()
+    if not ret:
+        print("Не удалось получить кадры")
+        return
+
+    out.write(prev_frame)  # Записываем первый кадр как есть
+
+    # Обрабатываем последующие кадры
+    for i in range(1, frame_count):
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Сравниваем текущий кадр с предыдущим
+        if not is_similar(prev_frame, frame, threshold):
+            out.write(frame)  # Записываем кадр только если он отличается
             prev_frame = frame  # Обновляем предыдущий кадр
 
-    reader.close()
-    writer.close()
-    print("Видео успешно отфильтровано и сохранено как 'output_filtered.mp4'")
+        else:
+            out.write(prev_frame)  # Записываем репрезентативный кадр
+
+    # Освобождаем видеофайлы
+    cap.release()
+    out.release()
+
+    print(f"Обработка завершена, видео сохранено как {output_video_path}")
 
 
-# Запуск фильтрации
-video_path = 'C:\\Users\\sckwo\\PycharmProjects\\Video-Segmentation\\video.mp4'
-filter_similar_frames(video_path, similarity_threshold=0.4)
+# Пример использования
+replace_similar_frames_with_audio('video.mp4', 'output_video.mp4')
