@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from moviepy.editor import VideoFileClip
 
 
 def get_frame_diff(frame1, frame2):
@@ -11,7 +12,7 @@ def is_similar(frame1, frame2, threshold=30):
     return np.mean(diff) < threshold
 
 
-def replace_similar_frames_with_audio(video_path, output_video_path, threshold=30):
+def replace_similar_frames(video_path, temp_video_path, threshold=30):
     # Чтение исходного видео
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -26,7 +27,7 @@ def replace_similar_frames_with_audio(video_path, output_video_path, threshold=3
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
     # Открываем видео для записи
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
+    out = cv2.VideoWriter(temp_video_path, fourcc, fps, (width, height))
 
     # Получаем первый кадр
     ret, prev_frame = cap.read()
@@ -54,8 +55,21 @@ def replace_similar_frames_with_audio(video_path, output_video_path, threshold=3
     cap.release()
     out.release()
 
-    print(f"Обработка завершена, видео сохранено как {output_video_path}")
+
+def merge_audio_video(original_video_path, temp_video_path, output_video_path):
+    # Извлечение аудио и объединение с видео
+    original_clip = VideoFileClip(original_video_path)
+    new_clip = VideoFileClip(temp_video_path)
+
+    # Слияние аудио из оригинального видео с новым видео
+    final_clip = new_clip.set_audio(original_clip.audio)
+    final_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
 
 
 # Пример использования
-replace_similar_frames_with_audio('video.mp4', 'output_video.mp4')
+input_video = 'video.mp4'
+temp_video = 'temp_video.mp4'
+output_video = 'output_video_with_audio.mp4'
+
+replace_similar_frames(input_video, temp_video)
+merge_audio_video(input_video, temp_video, output_video)
